@@ -1,5 +1,6 @@
 package com.dzvd.newsgroupapp;
 
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.NotificationCompat;
 import androidx.recyclerview.widget.RecyclerView;
@@ -11,6 +12,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
@@ -27,9 +29,11 @@ import org.jsoup.select.Elements;
 import org.w3c.dom.Text;
 
 import java.io.IOException;
+import java.util.List;
 
+@RequiresApi(api = Build.VERSION_CODES.R)
 public class MsgActivity extends AppCompatActivity {
-
+    static private List forbiddenWords = List.of("Newsgroup", "Xref", "Followup", "Reply", "User-agent", "Keywords", "Summary", "References", "Distribution", "Organization");
     private String url;
     TextView txtViewTitle, txtViewDetails, txtViewMsg;
     String title, details, msg;
@@ -42,27 +46,24 @@ public class MsgActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_msg);
         //appointing views and buttons to the ones created in xml
-        txtViewTitle = (TextView) findViewById(R.id.txtViewTitle);
-        txtViewDetails = (TextView) findViewById(R.id.txtViewDetails);
-        txtViewMsg = (TextView) findViewById(R.id.txtViewMsg);
+        txtViewTitle = findViewById(R.id.txtViewTitle);
+        txtViewDetails = findViewById(R.id.txtViewDetails);
+        txtViewMsg = findViewById(R.id.txtViewMsg);
         txtViewMsg.setMovementMethod(ScrollingMovementMethod.getInstance());
         url = getIntent().getStringExtra("url");
         prevButton = findViewById(R.id.buttonPrev);
         nextButton = findViewById(R.id.buttonNext);
 
         //setting onclick event listeners for buttons, to go to prev and next message
-        prevButton.setOnClickListener(new View.OnClickListener() {
-                                          @Override
-                                          public void onClick(View view) {
-                                              if (previous != null) {
-                                                  Intent intent = new Intent(view.getContext(), MsgActivity.class);
-                                                  intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_TASK_ON_HOME);
-                                                  intent.putExtra("url", url + previous);
-                                                  startActivity(intent);
-                                                  finish();
-                                              } else warn();
-                                          }
-                                      }
+        prevButton.setOnClickListener(view -> {
+                    if (previous != null) {
+                        Intent intent = new Intent(view.getContext(), MsgActivity.class);
+                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_TASK_ON_HOME);
+                        intent.putExtra("url", url + previous);
+                        startActivity(intent);
+                        finish();
+                    } else warn();
+                }
         );
         nextButton.setOnClickListener(new View.OnClickListener() {
                                           @Override
@@ -80,17 +81,14 @@ public class MsgActivity extends AppCompatActivity {
         Content content = new Content();
         content.execute();
     }
+
     //warn if there is no next or previous message
     public void warn() {
         AlertDialog alertDialog = new AlertDialog.Builder(MsgActivity.this).create();
         alertDialog.setTitle("Warning");
         alertDialog.setMessage("Trying to retrieve something that doesn't exist");
         alertDialog.setButton(AlertDialog.BUTTON_NEUTRAL, "OK",
-                new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int which) {
-                        dialog.dismiss();
-                    }
-                });
+                (dialog, which) -> dialog.dismiss());
         alertDialog.show();
     }
 
@@ -115,6 +113,20 @@ public class MsgActivity extends AppCompatActivity {
             super.onCancelled();
         }
 
+        public String formatDetails(String details) {
+            details = details.replace("Date", "Date:");
+            details = details.replace("From", "From:");
+            details = details.replace("Subject", "Subject:");
+            return details;
+        }
+
+        public String formatUrl(String url) {
+            url = url.replace("msg", "");
+            if (url.contains("0"))
+                url = url.substring(0, url.indexOf("0"));
+            return url;
+        }
+
         @Override
         protected Void doInBackground(Void... voids) {
             try {
@@ -125,39 +137,21 @@ public class MsgActivity extends AppCompatActivity {
                 } else {
                     document = Jsoup.connect(url).get();
                 }
-                url = url.replace("msg", "");
-                if (url.contains("0"))
-                    url = url.substring(0, url.indexOf("0"));
+                url = formatUrl(url);
                 //setting title of message
                 title = document.select("h1").text().replace("Mail Index", "");
                 details = "";
                 //filling up the details, skipping not so important information, because its irrelevant + takes time to parse and format into design
                 Elements tablerows = document.select("tr");
                 for (int i = 0; i < tablerows.size(); i++) {
-                    if (tablerows.select("tr").eq(i).select("td").text().contains("Newsgroup"))
-                        continue;
-                    if (tablerows.select("tr").eq(i).select("td").text().contains("Xref")) continue;
-                    if (tablerows.select("tr").eq(i).select("td").text().contains("Followup"))
-                        continue;
-                    if (tablerows.select("tr").eq(i).select("td").text().contains("Reply"))
-                        continue;
-                    if (tablerows.select("tr").eq(i).select("td").text().contains("User-agent"))
-                        continue;
-                    if (tablerows.select("tr").eq(i).select("td").text().contains("Keywords"))
-                        continue;
-                    if (tablerows.select("tr").eq(i).select("td").text().contains("Summary"))
-                        continue;
-                    if (tablerows.select("tr").eq(i).select("td").text().contains("References"))
-                        continue;
-                    if (tablerows.select("tr").eq(i).select("td").text().contains("Distribution"))
+                    int finalI = i;
+                    if (forbiddenWords.stream().anyMatch(word -> tablerows.select("tr").eq(finalI).select("td").text().contains((String) word)))
                         continue;
                     details += tablerows.select("tr").eq(i).select("td").text();
                     details += "\n";
                 }
                 //formatting for nicer look
-                details = details.replace("Date", "Date:");
-                details = details.replace("From", "From:");
-                details = details.replace("Subject", "Subject:");
+                details = formatDetails(details);
                 //selecting msg consisting of original text and quotes
                 msg = document.select("pre,blockquote").text();
                 //preparing next and previous message links to go to
