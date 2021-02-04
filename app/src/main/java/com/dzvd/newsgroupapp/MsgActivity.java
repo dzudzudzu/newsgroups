@@ -2,38 +2,28 @@ package com.dzvd.newsgroupapp;
 
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.NotificationCompat;
-import androidx.recyclerview.widget.RecyclerView;
 
+import android.annotation.SuppressLint;
 import android.app.AlertDialog;
-import android.app.Notification;
-import android.app.NotificationManager;
-import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.method.ScrollingMovementMethod;
-import android.util.Log;
-import android.view.View;
-import android.view.animation.AnimationUtils;
 import android.widget.Button;
-import android.widget.ProgressBar;
-import android.widget.ScrollView;
 import android.widget.TextView;
-
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
-import org.w3c.dom.Text;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @RequiresApi(api = Build.VERSION_CODES.R)
 public class MsgActivity extends AppCompatActivity {
-    static private List forbiddenWords = List.of("Newsgroup", "Xref", "Followup", "Reply", "User-agent", "Keywords", "Summary", "References", "Distribution", "Organization");
+    static private ArrayList<String> forbiddenWords = new ArrayList<>(List.of("Newsgroup", "Xref", "Followup", "Reply", "User-agent", "Keywords", "Summary", "References", "Distribution", "Organization"));
     private String url;
     TextView txtViewTitle, txtViewDetails, txtViewMsg;
     String title, details, msg;
@@ -42,7 +32,7 @@ public class MsgActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        getSupportActionBar().hide();
+        Objects.requireNonNull(getSupportActionBar()).hide();
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_msg);
         //appointing views and buttons to the ones created in xml
@@ -65,18 +55,15 @@ public class MsgActivity extends AppCompatActivity {
                     } else warn();
                 }
         );
-        nextButton.setOnClickListener(new View.OnClickListener() {
-                                          @Override
-                                          public void onClick(View view) {
-                                              if (next != null) {
-                                                  Intent intent = new Intent(view.getContext(), MsgActivity.class);
-                                                  intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_TASK_ON_HOME);
-                                                  intent.putExtra("url", url + next);
-                                                  startActivity(intent);
-                                                  finish();
-                                              } else warn();
-                                          }
-                                      }
+        nextButton.setOnClickListener(view -> {
+                    if (next != null) {
+                        Intent intent = new Intent(view.getContext(), MsgActivity.class);
+                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_TASK_ON_HOME);
+                        intent.putExtra("url", url + next);
+                        startActivity(intent);
+                        finish();
+                    } else warn();
+                }
         );
         Content content = new Content();
         content.execute();
@@ -92,6 +79,7 @@ public class MsgActivity extends AppCompatActivity {
         alertDialog.show();
     }
 
+    @SuppressLint("StaticFieldLeak")
     private class Content extends AsyncTask<Void, Void, Void> {
         @Override
         protected void onPreExecute() {
@@ -145,10 +133,9 @@ public class MsgActivity extends AppCompatActivity {
                 Elements tablerows = document.select("tr");
                 for (int i = 0; i < tablerows.size(); i++) {
                     int finalI = i;
-                    if (forbiddenWords.stream().anyMatch(word -> tablerows.select("tr").eq(finalI).select("td").text().contains((String) word)))
+                    if (forbiddenWords.stream().anyMatch(word -> tablerows.select("tr").eq(finalI).select("td").text().contains(word)))
                         continue;
-                    details += tablerows.select("tr").eq(i).select("td").text();
-                    details += "\n";
+                    details += tablerows.select("tr").eq(i).select("td").text() + "\n";
                 }
                 //formatting for nicer look
                 details = formatDetails(details);
